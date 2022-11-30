@@ -78,7 +78,7 @@ sampler.reset()
 
 """ Production """
 #Maintenant on fait notre production pour 10000 pas:
-sampler.run_mcmc(state, 10000)
+sampler.run_mcmc(state, 10000, progress = True)
 
 # On peut acceder au sample avec la fonction get_chain(**kwargs): obtient les chains de MCMC samples qui sont stored.
 # Elle va donner un array avec une shape (10000, 32, 5) avec les valeurs des parametres pour chaque walker et chaque pas dans la chaîne.
