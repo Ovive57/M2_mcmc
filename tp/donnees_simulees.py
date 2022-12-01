@@ -17,7 +17,6 @@ def bruit(psd, sigma):
 
     Returns:
         array : le bruit coloré dans l'espace réel
-    
     """
     bruit_blanc = np.random.normal(0,sigma,len(psd))
     fourier_blanc = np.fft.fft(bruit_blanc)
@@ -34,7 +33,7 @@ def covariance(psd, rayons, n_realis, sigma):
     Args:
         psd (array): densité spectrale de puissance du bruit coloré
         rayons (array): abscisse des données
-        n_realis (int): est le nombre de réalisations de bruits 
+        n_realis (int): est le nombre de réalisations de bruits
 
     Returns:
         array : Matrice de covariance (Cn) et son inverse (cov)
@@ -47,27 +46,47 @@ def covariance(psd, rayons, n_realis, sigma):
     Cn /= n_realis
     cov = np.linalg.inv(Cn)
     return cov
- 
+
 def modele_init(r, rho_0, r_p ):
+    """
+    Modèle de la partie exponentielle
+
+    Args:
+        r (array): data rayons
+        rho_0 (float): amplitude
+        r_p (float): rayon caractéristique
+
+    Returns:
+        array: Function exponentielle
+    """
     a=1.1
     b=5.5
     c=0.31
     return rho_0 /(((r/r_p)**c)*(1+(r/r_p)**a)**((b-c)/a))
-    
-def modele(rayons, amp, mu, sigma, rho_0, r_p ):
+
+def modele(rayons, amp, mu, sigma, rho_0, r_p):
+    """Modèle avec structure en train de fusionner avec le halo principal, modelisée par une gaussienne.
+
+    Args:
+        rayons (array): data rayons
+        amp (float): amplitud gaussienne
+        mu (float): centre gaussienne
+        sigma (float): deviation standard gaussienne
+        rho_0 (float): amplitude de la fonction exponentielle
+        r_p (float) : rayon caractéristique
+
+    Returns:
+        float: Function exponentielle avec una gaussienne
+    """
     mod = modele_init(rayons, rho_0, r_p )
     mod += amp*stats.norm.pdf(rayons, mu,sigma)
     return mod
-    
 
 
 
 
+#np.random.seed(45)
 
-
-
-np.random.seed(45)
-    
 n_realis = 1000
 
 sigma_bruit = 10**(-3) #cf ennoncé
@@ -83,9 +102,8 @@ n_realis = 10000
 
 
 # Matrice de covariance associée:
-    
-    
-    
+
+
 cov = covariance(psd, rayons, n_realis,  sigma_bruit)
 
 
@@ -166,60 +184,140 @@ g.export('image.pdf')
 ################# MCMC #####################
 
 def proposition(etat_act, dev_act):
+    """Fonction de proposition
+
+    Args:
+        etat_act (5-array): paramètres iniciaux
+        dev_act (5-array): déviations stabdars associés
+
+    Returns:
+        5-array: paramètres proposés pour tester
+    """
     etat_test = np.random.normal(etat_act, dev_act)
     return etat_test
 
 # Mettre tous les parametres en un vecteur
+theta = [amp, mu, sigma, rho_0, r_p]
 
-def log_prior(amp, mu, sigma, rho_0, r_p):
-    if amp > 7 and amp < 14 and mu > 1400 and mu < 1650 and sigma > 130 and sigma < 230 and rho_0 > 0.0065 and rho_0 < 0.012 and r_p > 800 and r_p < 2100:
+
+def log_prior(*theta):
+    """Verification que les parametres sont logiques
+
+    Returns:
+        int/float: 0 (int) si valide -inf(float) si pas valide
+    """
+    if theta[0] > 0 \
+    and theta[1] > 0 \
+    and theta[2] > 0 \
+    and theta[3] > 0 \
+    and theta[4] > 0:
         return 0
     else:
         return -np.inf
 
-def log_likelihood(densite, rayons, cov, amp, mu, sigma, rho_0, r_p):
-    model = modele(rayons, amp, mu, sigma, rho_0, r_p)
-    #print("le model",model) #á chaque fois il veut voir ça. Il n'y a pas de nan, top
-    chi2 = np.dot(densite - model, np.dot(cov, densite - model))
-    
-    return (-1/2)*chi2
-    
-    
-def log_probability(densite, rayons, cov, amp, mu, sigma, rho_0, r_p): # METTRE EN VECTEUR, POUR EMCEE
-    lp = log_prior(amp, mu, sigma, rho_0, r_p)
+def log_likelihood(*theta, d, r, cov):
+    """Logarithme de la fonction de vraisemblance pour des paramètres donnés
 
+    Args:
+        d (array): densité. y-axis de nos données.
+        r (array): rayon. x-axis de nos données.
+        cov (matrix): matrice de covariance inverse.
+
+    Returns:
+        float: logarithme de la fonction de vraisemblance # pas sure du type, vérifier
+    """
+    model = modele(r, theta[0], theta[1], theta[2],theta[3],theta[4])
+    #print("le model",model) #á chaque fois il veut voir ça. Il n'y a pas de nan, top
+    chi2 = np.dot(d - model, np.dot(cov, d - model))
+
+    return (-1/2)*chi2
+
+def log_probability(*theta, d, r, cov):
+    """Logarithme de la distribution postérieure pour des paramètres initiaux donnés.
+
+    Args:
+        d (array): densité. y-axis de nos données.
+        r (array): rayon. x-axis de nos données.
+        cov (matrix): matrice de covariance inverse.
+
+    Returns:
+        float: Logarithme de la distribution postérieure # pas sure, vérifier
+    """
+    lp = log_prior(*theta)
     if not np.isfinite(lp):
         return -np.inf
 
-    return lp + log_likelihood(densite, rayons, cov, amp, mu, sigma, rho_0, r_p)
+    return lp + log_likelihood(*theta, d = d, r = r, cov = cov) # si on especifie pas d =  et r = ça reconnais pas, c'est pour ça que j'ai mis des noms plus courts aussi (d et r en lieu de densité et rayons)
 
-def log_acceptance(densite, rayons, cov, etat_act, etat_test):
-    test = log_probability(densite, rayons, cov, *etat_test) + log_prior(*etat_test)  
-    act = log_probability(densite, rayons, cov, *etat_act) + log_prior(*etat_act)
+# Exemple
+# a = log_probability(*theta, d = densite, r = rayons, cov = cov)
+
+
+def log_acceptance(etat_act, etat_test, densite, rayons, cov):
+    """Logarithme du rapport d'acceptance à partir des paramétres initiaux et proposés
+
+    Args:
+        etat_act (5-array): état actuel, initial
+        etat_test (5-array): état proposé
+        densite (array):  densité. y-axis de nos données.
+        rayons  (array): rayon. x-axis de nos données.
+        cov (matrix): matrice de covariance inverse.
+
+    Returns:
+        float: Acceptance (en log)
+    """
+    test = log_probability(*etat_test, d = densite, r = rayons, cov = cov) + log_prior(*etat_test)
+    act = log_probability(*etat_test, d = densite, r = rayons, cov = cov) + log_prior(*etat_act)
     return test-act
 
-def test_param(densite, rayons, cov, etat_act, dev_act):
+def test_param(etat_act, dev_act, densite, rayons, cov):
+    """test qui décide entre l'etat proposé ou l'etat actuel
+
+    Args:
+        etat_act (5-array): état actuel, initial
+        dev_act (5-array): déviations stabdars associés
+        densite (array):  densité. y-axis de nos données.
+        rayons  (array): rayon. x-axis de nos données.
+        cov (matrix): matrice de covariance inverse.
+
+    Returns:
+        5-array: Nouveau état actuel
+    """
     u = np.random.uniform(0.0,1.0)
     etat_test = proposition(etat_act, dev_act)
-    alpha = np.exp(log_acceptance(densite, rayons, cov, etat_act, etat_test))
-    
-    if u < alpha :
+    alpha = np.exp(log_acceptance(etat_act, etat_test, densite, rayons, cov))
+
+    if u <= alpha :
         return etat_test # On accepte les nouveaux paramètres
-    else: 
+    else:
         return etat_act # On rejete les nouveaux paramètres et on garde l'état actuel
 
-def algorithme(densite, rayons, cov, etat_act, pas, npas):
+def algorithme(etat_act, pas, densite, rayons, cov, npas):
+    """Fonction qui fait tout l'algorithme avec plusieurs pas
+
+    Args:
+        etat_act (5-array): état actuel, initial
+        pas (5-array): taille possible du pas (déviation standard de chaque état)
+        densite (array):  densité. y-axis de nos données.
+        rayons  (array): rayon. x-axis de nos données.
+        cov (matrix): matrice de covariance inverse.
+        npas (int): nombre de pas dont on fait l'algorithme
+
+    Returns:
+        _type_: _description_
+    """
     matrice_param = []
     for i in range(npas):
-        new = test_param(densite, rayons, cov, etat_act, pas)
+        new = test_param(etat_act, pas, densite, rayons, cov)
         matrice_param.append(new)
+        etat_act = new # Avant on faisait pas ça, on partait tout le temps de l'etat initial, du coup on bougeait jamais.
     return np.array(matrice_param)
 
 
 pas = [0.1, 10, 10, 0.001, 10]
 
 
-chaine = algorithme(densite, rayons, cov, etat_init, pas, npas = 10000)
+chaine = algorithme(etat_init, pas, densite, rayons, cov, npas = 10000)
 
 rho_0_ev = chaine[:,3]
 r_p_ev = chaine[:,4]
@@ -240,11 +338,13 @@ plt.show()
 # nwalkers : nombre de chaines de Markov
 # ndim : nombre de parametres
 
-"""
+nwalkers = 10
+ndim = 5
+
 sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [rayons, densite, cov])
 
-state =sampler.run_mcmc(densite, 100)
-"""
+#state =sampler.run_mcmc(densite, 100)
+
 
 
 
