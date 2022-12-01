@@ -2,8 +2,9 @@ import numpy as np
 import emcee
 import matplotlib.pyplot as plt
 
-# On veut desiner samples de la densité gaussienne multivariable:
 
+""" BUT """
+# On veut dessiner des samples de la densité gaussienne multivariable suivante:
 # p(a) prop exp[-0.5(x-nu)^T/sigma (x-nu)]
 
 # nu: N-dim moyenne
@@ -27,6 +28,7 @@ ndim = 5
 np.random.seed(42)
 means = np.random.rand(ndim) # Vecteur 5-dim
 #print(means)
+
 cov = 0.5 - np.random.rand(ndim**2).reshape((ndim, ndim)) # Matrice 5x5
 #print(cov)
 cov = np.triu(cov) # Enleve les valeurs en dessous de la diagonale
@@ -71,6 +73,7 @@ sampler = emcee.EnsembleSampler(nwalkers, ndim, log_prob, args =[means,cov])
 
 
 state = sampler.run_mcmc(p0, 100)
+
 sampler.reset()
 
 # On a gardé la position finale des walkers après 100 pas dans la variable state.
@@ -78,16 +81,23 @@ sampler.reset()
 
 """ Production """
 #Maintenant on fait notre production pour 10000 pas:
-sampler.run_mcmc(state, 10000, progress = True)
+sampler.run_mcmc(state, 10000)
 
 # On peut acceder au sample avec la fonction get_chain(**kwargs): obtient les chains de MCMC samples qui sont stored.
 # Elle va donner un array avec une shape (10000, 32, 5) avec les valeurs des parametres pour chaque walker et chaque pas dans la chaîne.
 
-samples = sampler.get_chain(flat=True)
+samples = sampler.get_chain()
+print("shape de samples:", np.shape(samples))
 
 # On peut dessiner histograms de ces samples pour obtenir une estimation de la densité qu'on sample:
 
-plt.hist(samples[:, 0], 100, color="k", histtype="step")
+plt.hist(samples[:, 1], 100, histtype="step")
+"""
+plt.hist(samples[:, 2], 100, histtype="step")
+plt.hist(samples[:, 3], 100, histtype="step")
+plt.hist(samples[:, 4], 100, histtype="step")
+plt.hist(samples[:, 0], 100, histtype="step")
+"""
 plt.xlabel(r"$\theta_1$")
 plt.ylabel(r"$p(\theta_1)$")
 plt.gca().set_yticks([]);
