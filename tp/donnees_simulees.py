@@ -4,6 +4,7 @@ import scipy.stats as stats
 from scipy.optimize import curve_fit
 import getdist
 from getdist import plots, MCSamples
+import emcee
 
 
 def bruit(psd, sigma):
@@ -45,13 +46,13 @@ def covariance(psd, rayons, n_realis, sigma):
         Cn += np.dot(np.transpose(bruit_color[None, 0:n_donnees]), bruit_color[None, 0:n_donnees])
     Cn /= n_realis
     cov = np.linalg.inv(Cn)
-    return cov, Cn
+    return cov
  
 def modele_init(r, rho_0, r_p ):
     a=1.1
     b=5.5
     c=0.31
-    return rho_0 /((r/r_p)**c*(1+(r/r_p)**a)**((b-a)/c))
+    return rho_0 /(((r/r_p)**c)*(1+(r/r_p)**a)**((b-c)/a))
     
 def modele(rayons, amp, mu, sigma, rho_0, r_p ):
     mod = modele_init(rayons, rho_0, r_p )
@@ -85,7 +86,7 @@ n_realis = 10000
     
     
     
-cov, cn = covariance(psd, rayons, n_realis,  sigma_bruit)
+cov = covariance(psd, rayons, n_realis,  sigma_bruit)
 
 
 # Plot du modèle initial:
@@ -96,9 +97,9 @@ plt.show()
 
 # On trace le modèle avec une gaussienne rajoutée:
 
-sigma = 140
-mu = 1500
 amp = 10.5
+mu = 1500
+sigma = 140
 rho_0 = 0.010
 r_p = 900
 
@@ -112,13 +113,17 @@ plt.show()
 """
 
 # Tableau de valeurs qui semblent adaptés pour la minisation du chi 2
-tab = np.array([amp, mu, sigma, rho_0, r_p])
+etat_init = np.array([amp, mu, sigma, rho_0, r_p])
 
 
 
 # Estimation des meileures valeurs des paramètres avec curve_fit:
 
-param, pcov = curve_fit(modele, rayons, densite, tab)
+param, pcov = curve_fit(modele, rayons, densite, etat_init)
+
+print(param)
+
+# où param = [amp, mu, sigma, rho_0, r_p]
 
 
 #print("paramètres trouvés:", param) # à print mieux plus tard
@@ -135,19 +140,128 @@ plt.show()
 """
 
 # A faire : plusieurs etudes de la valeurs de chi2 en fonction du nombre de realisation du bruit
+""" Calcul de chi2, de-commenter après, ça prends du temps """
 chi2 = np.dot(densite-mode_fit, np.dot(cov, densite-mode_fit))
 
 
 #print(chi2)
 
-multi_norm = np.random.multivariate_normal(param, pcov)
+npoints = 1000
+multi_norm = np.random.multivariate_normal(param, pcov, npoints)
 
 
 
 samples = MCSamples(samples=multi_norm)
 
+# À refaire propre, labels et titre. style plot. (https://getdist.readthedocs.io/en/latest/plot_gallery.html)
+
+"""
 g = plots.get_subplot_plotter()
 g.triangle_plot(samples, filled=True)
+
+g.export('image.pdf')
+"""
+
+
+################# MCMC #####################
+
+def proposition(etat_act, dev_act):
+    etat_test = np.random.normal(etat_act, dev_act)
+    return etat_test
+
+# Mettre tous les parametres en un vecteur
+
+def log_prior(amp, mu, sigma, rho_0, r_p):
+    if amp > 7 and amp < 14 and mu > 1400 and mu < 1650 and sigma > 130 and sigma < 230 and rho_0 > 0.0065 and rho_0 < 0.012 and r_p > 800 and r_p < 2100:
+        return 0
+    else:
+        return -np.inf
+
+def log_likelihood(densite, rayons, cov, amp, mu, sigma, rho_0, r_p):
+    model = modele(rayons, amp, mu, sigma, rho_0, r_p)
+    #print("le model",model) #á chaque fois il veut voir ça. Il n'y a pas de nan, top
+    chi2 = np.dot(densite - model, np.dot(cov, densite - model))
+    
+    return (-1/2)*chi2
+    
+    
+def log_probability(densite, rayons, cov, amp, mu, sigma, rho_0, r_p): # METTRE EN VECTEUR, POUR EMCEE
+    lp = log_prior(amp, mu, sigma, rho_0, r_p)
+
+    if not np.isfinite(lp):
+        return -np.inf
+
+    return lp + log_likelihood(densite, rayons, cov, amp, mu, sigma, rho_0, r_p)
+
+def log_acceptance(densite, rayons, cov, etat_act, etat_test):
+    test = log_probability(densite, rayons, cov, *etat_test) + log_prior(*etat_test)  
+    act = log_probability(densite, rayons, cov, *etat_act) + log_prior(*etat_act)
+    return test-act
+
+def test_param(densite, rayons, cov, etat_act, dev_act):
+    u = np.random.uniform(0.0,1.0)
+    etat_test = proposition(etat_act, dev_act)
+    alpha = np.exp(log_acceptance(densite, rayons, cov, etat_act, etat_test))
+    
+    if u < alpha :
+        return etat_test # On accepte les nouveaux paramètres
+    else: 
+        return etat_act # On rejete les nouveaux paramètres et on garde l'état actuel
+
+def algorithme(densite, rayons, cov, etat_act, pas, npas):
+    matrice_param = []
+    for i in range(npas):
+        new = test_param(densite, rayons, cov, etat_act, pas)
+        matrice_param.append(new)
+    return np.array(matrice_param)
+
+
+pas = [0.1, 10, 10, 0.001, 10]
+
+
+chaine = algorithme(densite, rayons, cov, etat_init, pas, npas = 10000)
+
+rho_0_ev = chaine[:,3]
+r_p_ev = chaine[:,4]
+
+
+
+npas = np.linspace(0,10000,10000)
+plt.plot(npas, rho_0_ev)
+plt.show()
+
+plt.plot(r_p_ev, rho_0_ev)
+plt.show()
+
+
+
+############# EMCEE #########################
+
+# nwalkers : nombre de chaines de Markov
+# ndim : nombre de parametres
+
+"""
+sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [rayons, densite, cov])
+
+state =sampler.run_mcmc(densite, 100)
+"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
