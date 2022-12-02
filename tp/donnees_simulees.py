@@ -62,7 +62,9 @@ def modele_init(r, rho_0, r_p ):
     a=1.1
     b=5.5
     c=0.31
-    return rho_0 /(((r/r_p)**c)*(1+(r/r_p)**a)**((b-c)/a))
+    mod = rho_0 /(((r/r_p)**c)*(1+(r/r_p)**a)**((b-c)/a))
+    #print(rho_0, r_p)
+    return mod
 
 def modele(rayons, amp, mu, sigma, rho_0, r_p):
     """Modèle avec structure en train de fusionner avec le halo principal, modelisée par une gaussienne.
@@ -113,7 +115,7 @@ plt.show()
 """
 
 # On trace le modèle avec une gaussienne rajoutée:
-
+# Mettre plus loin mais pas trop
 amp = 10.5
 mu = 1500
 sigma = 140
@@ -149,22 +151,23 @@ print(param)
 #print(np.shape(pcov))
 
 mode_fit = modele(rayons, *param)
-print("model:", mode_fit)
+#print("model:", mode_fit)
 
 
-""" Plot du modèle avec un premier fit de paramètres:
+"""
+#Plot du modèle avec un premier fit de paramètres:
 plt.plot(rayons, mode_fit)
 plt.plot(rayons, densite)
 plt.xscale('log')
 plt.show()
-"""
 
+"""
 # A faire : plusieurs etudes de la valeurs de chi2 en fonction du nombre de realisation du bruit
 """ Calcul de chi2, de-commenter après, ça prends du temps """
 chi2 = np.dot(densite-mode_fit, np.dot(cov, densite-mode_fit))
 
 
-print(chi2)
+#print(chi2)
 
 npoints = 1000
 multi_norm = np.random.multivariate_normal(param, pcov, npoints)
@@ -201,8 +204,11 @@ def proposition(etat_act, dev_act):
 # Mettre tous les parametres en un vecteur
 theta = [amp, mu, sigma, rho_0, r_p]
 
+#dev_act = np.array([0.1e-2,50,0.2,50,10])
+#prop = proposition(theta, dev_act)
 
-def log_prior(*theta):
+
+def log_prior(theta):
     """Verification que les parametres sont logiques
 
     Returns:
@@ -217,7 +223,7 @@ def log_prior(*theta):
     else:
         return -np.inf
 
-def log_likelihood(*theta, d, r, cov):
+def log_likelihood(theta, d, r, cov):
     """Logarithme de la fonction de vraisemblance pour des paramètres donnés
 
     Args:
@@ -229,13 +235,21 @@ def log_likelihood(*theta, d, r, cov):
         float: logarithme de la fonction de vraisemblance # pas sure du type, vérifier
     """
     model = modele(r, *theta)
-    print("model:", model)
+    """
+    plt.plot(r, model)
+    plt.plot(r, d)
+    plt.title('Model likelihood')
+    plt.xscale('log')
+    plt.show()
+    """
+    #print("model:", model)
     #print("le model",model) #á chaque fois il veut voir ça. Il n'y a pas de nan, top
     chi2 = np.dot(d - model, np.dot(cov, d - model))
-    print("chi2:", chi2)
+    #print("chi2:", (-1/2)*chi2)
     return (-1/2)*chi2
 
-def log_probability(*theta, d, r, cov):
+
+def log_probability(theta, d, r, cov):
     """Logarithme de la distribution postérieure pour des paramètres initiaux donnés.
 
     Args:
@@ -246,13 +260,18 @@ def log_probability(*theta, d, r, cov):
     Returns:
         float: Logarithme de la distribution postérieure # pas sure, vérifier
     """
-    lp = log_prior(*theta)
+    lp = log_prior(theta)
     if not np.isfinite(lp):
         return -np.inf
-    return lp + log_likelihood(*theta, d = d, r = r, cov = cov) # si on ne specifie pas d =  et r = ça reconnais pas, c'est pour ça que j'ai mis des noms plus courts aussi (d et r en lieu de densité et rayons)
+    ll = log_likelihood(theta, d = d, r = r, cov = cov)
+    #print(ll)
+    return lp + ll # si on ne specifie pas d =  et r = ça reconnais pas, c'est pour ça que j'ai mis des noms plus courts aussi (d et r en lieu de densité et rayons)
+
+
 
 # Exemple
-# a = log_probability(*theta, d = densite, r = rayons, cov = cov)
+#a = log_probability(*theta, d = densite, r = rayons, cov = cov)
+#print("test proba", a)
 
 
 def log_acceptance(etat_act, etat_test, densite, rayons, cov):
@@ -268,9 +287,17 @@ def log_acceptance(etat_act, etat_test, densite, rayons, cov):
     Returns:
         float: Acceptance (en log)
     """
-    test = log_probability(*etat_test, d = densite, r = rayons, cov = cov) + log_prior(*etat_test)
-    act = log_probability(*etat_test, d = densite, r = rayons, cov = cov) + log_prior(*etat_act)
+    test = log_probability(etat_test, d = densite, r = rayons, cov = cov)
+    #print("test", test)
+    act = log_probability(etat_act, d = densite, r = rayons, cov = cov)
+    #print("act", act)
     return test-act
+
+#a = log_acceptance(theta, prop, densite, rayons, cov)
+#print("theta", theta)
+#print("prop",prop)
+#print("alpha", np.exp(a))
+
 
 def test_param(etat_act, dev_act, densite, rayons, cov):
     """test qui décide entre l'etat proposé ou l'etat actuel
@@ -287,9 +314,11 @@ def test_param(etat_act, dev_act, densite, rayons, cov):
     """
     u = np.random.uniform(0.0,1.0)
     etat_test = proposition(etat_act, dev_act)
+    #print("etat_test", etat_test)
     alpha = np.exp(log_acceptance(etat_act, etat_test, densite, rayons, cov))
-
+    #print("alpha", alpha) # alpha est toujours 0
     if u <= alpha :
+        
         return etat_test # On accepte les nouveaux paramètres
     else:
         return etat_act # On rejete les nouveaux paramètres et on garde l'état actuel
@@ -312,63 +341,108 @@ def algorithme(etat_act, pas, densite, rayons, cov, npas):
     for i in range(npas):
         new = test_param(etat_act, pas, densite, rayons, cov)
         matrice_param.append(new)
-        etat_act = new # Avant on faisait pas ça, on partait tout le temps de l'etat initial, du coup on bougeait jamais.
+        etat_act = new # Avant on faisait pas ça, on partait tout le temps de l'etat initial, du coup on bougeait jamais.   
     return np.array(matrice_param)
 
 
-pas = np.array([0.1e-2,50,0.2,50,10])
 
+pas = np.array([0.2, 50, 10,0.1e-2,50])
 
-#chaine = algorithme(etat_init, pas, densite, rayons, cov, npas = 10000)
 """
+chaine = algorithme(theta, pas, densite, rayons, cov, npas = 10000)
+
+
 rho_0_ev = chaine[:,3]
 r_p_ev = chaine[:,4]
-"""
+
 
 
 npas = np.linspace(0,10000,10000)
 
-"""
+
 plt.plot(npas, rho_0_ev)
 plt.show()
 
 plt.plot(r_p_ev, rho_0_ev)
 plt.show()
-"""
 
+"""
 
 ############# EMCEE #########################
 
 
-
 mat_pos = etat_init
 for i in range(9):
-    etat_init = etat_init+0.1  # A mettre au propre
+    amp = np.random.uniform(4,15)
+    mu = np.random.uniform(1000,2000)
+    sigma = np.random.uniform(100,300)
+    rho_0 = np.random.uniform(0.,1)
+    r_p = np.random.uniform(100,2500)
+    etat_init = np.array([amp, mu, sigma, rho_0, r_p])
     mat_pos = np.vstack((mat_pos, etat_init))
 
 # nwalkers : nombre de chaines de Markov
 # ndim : nombre de parametres
 nwalkers, ndim = mat_pos.shape
 
-print(nwalkers)
-print(ndim)
 
-sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [rayons, densite, cov])
-print(log_probability(*etat_init, d=densite, r=rayons, cov=cov))
-#print(etat_init.shape())
-step = 100
+sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [densite, rayons, cov]) # State marchait pas parce que on avait args = [rayons, densite, cov] xd
 
+step = 1000
+step_burnin = int(0.1*step)
 
-#print(mat_pos)
-#print(np.shape(mat_pos))
+state =sampler.run_mcmc(mat_pos, step_burnin) 
 
-state =sampler.run_mcmc(mat_pos, step, progress=True)
+sampler.reset() #burn-in
+
+sampler.run_mcmc(state, step, progress=True)
 
 
+chaines = sampler.get_chain()
+print("shape de chaines:", np.shape(chaines)) # On a 10 chaines, de 1000 échantillons avec 5 parametres chaque chaine.
+print("shape échantillons",np.shape(chaines[0])) # Il y en a 1000 échantillons
+print("shape premiere chaine", np.shape(chaines[:,0,:])) # 1000 échantillons 5 parametres
+# chaines[a,b,c] où a = échantillons(1000), b = chaines(10), c = paramétres(5)
+
+# On peut dessiner histograms de ces samples pour obtenir une estimation de la densité qu'on sample:
+
+"""
+plt.hist(chaines[:, 1], 100, histtype="step")
+
+plt.hist(chaines[:, 2], 100, histtype="step")
+plt.hist(chaines[:, 3], 100, histtype="step")
+plt.hist(chaines[:, 4], 100, histtype="step")
+plt.hist(chaines[:, 0], 100, histtype="step")
+
+plt.xlabel(r"$\theta_1$")
+plt.ylabel(r"$p(\theta_1)$")
+plt.gca().set_yticks([]);
+plt.show()
+
+"""
+
+#state =sampler.run_mcmc(mat_pos, 100, progress=True)
+
+#chaines = sampler.get_chain()
+#print(np.shape(chaines))
 
 
+# test de convergence Gelman-Rubin:
+# 1. Moyenne pour chaque parametre de la chaine pour chaque chaine:
+# J'essaie juste pour l'amplitud:
+moyenne = []
+chaine_moyenne = []
 
-
+for i in range(10):
+    for j in range(5):
+        moyenne_chaine = (1/len(chaines[:,i,j]))*np.sum(chaines[:,i,j])
+        print(moyenne_chaine, i, j)
+        chaine_moyenne.append(moyenne_chaine)
+    moyenne.append(chaine_moyenne[i])
+    #moyenne.append(moyenne_chaine)
+    #moyenne = np.vstack((moyenne, moyenne_chaine))
+    #chaine_moyenne.append(moyenne)
+print(np.shape(moyenne), moyenne)
 
 
 
