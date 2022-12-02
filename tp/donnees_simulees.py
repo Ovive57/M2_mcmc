@@ -122,6 +122,7 @@ r_p = 900
 
 mode = modele(rayons, amp, mu, sigma, rho_0, r_p)
 
+
 """ Plot du modèle avec notre 1er jeu de paramètres:
 plt.plot(rayons, mode)
 plt.plot(rayons, densite)
@@ -148,6 +149,8 @@ print(param)
 #print(np.shape(pcov))
 
 mode_fit = modele(rayons, *param)
+print("model:", mode_fit)
+
 
 """ Plot du modèle avec un premier fit de paramètres:
 plt.plot(rayons, mode_fit)
@@ -161,7 +164,7 @@ plt.show()
 chi2 = np.dot(densite-mode_fit, np.dot(cov, densite-mode_fit))
 
 
-#print(chi2)
+print(chi2)
 
 npoints = 1000
 multi_norm = np.random.multivariate_normal(param, pcov, npoints)
@@ -225,10 +228,11 @@ def log_likelihood(*theta, d, r, cov):
     Returns:
         float: logarithme de la fonction de vraisemblance # pas sure du type, vérifier
     """
-    model = modele(r, theta[0], theta[1], theta[2],theta[3],theta[4])
+    model = modele(r, *theta)
+    print("model:", model)
     #print("le model",model) #á chaque fois il veut voir ça. Il n'y a pas de nan, top
     chi2 = np.dot(d - model, np.dot(cov, d - model))
-
+    print("chi2:", chi2)
     return (-1/2)*chi2
 
 def log_probability(*theta, d, r, cov):
@@ -245,8 +249,7 @@ def log_probability(*theta, d, r, cov):
     lp = log_prior(*theta)
     if not np.isfinite(lp):
         return -np.inf
-
-    return lp + log_likelihood(*theta, d = d, r = r, cov = cov) # si on especifie pas d =  et r = ça reconnais pas, c'est pour ça que j'ai mis des noms plus courts aussi (d et r en lieu de densité et rayons)
+    return lp + log_likelihood(*theta, d = d, r = r, cov = cov) # si on ne specifie pas d =  et r = ça reconnais pas, c'est pour ça que j'ai mis des noms plus courts aussi (d et r en lieu de densité et rayons)
 
 # Exemple
 # a = log_probability(*theta, d = densite, r = rayons, cov = cov)
@@ -313,41 +316,53 @@ def algorithme(etat_act, pas, densite, rayons, cov, npas):
     return np.array(matrice_param)
 
 
-pas = [0.1, 10, 10, 0.001, 10]
+pas = np.array([0.1e-2,50,0.2,50,10])
 
 
-chaine = algorithme(etat_init, pas, densite, rayons, cov, npas = 10000)
-
+#chaine = algorithme(etat_init, pas, densite, rayons, cov, npas = 10000)
+"""
 rho_0_ev = chaine[:,3]
 r_p_ev = chaine[:,4]
-
+"""
 
 
 npas = np.linspace(0,10000,10000)
+
+"""
 plt.plot(npas, rho_0_ev)
 plt.show()
 
 plt.plot(r_p_ev, rho_0_ev)
 plt.show()
-
+"""
 
 
 ############# EMCEE #########################
 
+
+
+mat_pos = etat_init
+for i in range(9):
+    etat_init = etat_init+0.1  # A mettre au propre
+    mat_pos = np.vstack((mat_pos, etat_init))
+
 # nwalkers : nombre de chaines de Markov
 # ndim : nombre de parametres
+nwalkers, ndim = mat_pos.shape
 
-nwalkers = 10
-ndim = 5
+print(nwalkers)
+print(ndim)
 
 sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [rayons, densite, cov])
-
-#state =sampler.run_mcmc(densite, 100)
-
-
-
+print(log_probability(*etat_init, d=densite, r=rayons, cov=cov))
+#print(etat_init.shape())
+step = 100
 
 
+#print(mat_pos)
+#print(np.shape(mat_pos))
+
+state =sampler.run_mcmc(mat_pos, step, progress=True)
 
 
 
