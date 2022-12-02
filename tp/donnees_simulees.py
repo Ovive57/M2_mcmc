@@ -427,29 +427,48 @@ plt.show()
 #print(np.shape(chaines))
 
 
-# test de convergence Gelman-Rubin:
-# 1. Moyenne pour chaque parametre de la chaine pour chaque chaine:
-# J'essaie juste pour l'amplitud:
-moyenne = []
-chaine_moyenne = []
+# test de convergence Gelman-Rubin
+# Florian m'a dit qu'il faut faire un test pour chaque parametre !
+# Je vais faire pour l'amplitude
 
-for i in range(10):
-    for j in range(5):
-        moyenne_chaine = (1/len(chaines[:,i,j]))*np.sum(chaines[:,i,j])
-        print(moyenne_chaine, i, j)
-        chaine_moyenne.append(moyenne_chaine)
-    moyenne.append(chaine_moyenne[i])
-    #moyenne.append(moyenne_chaine)
-    #moyenne = np.vstack((moyenne, moyenne_chaine))
-    #chaine_moyenne.append(moyenne)
-print(np.shape(moyenne), moyenne)
+# NB : j - nombre chaines cad 10, i - len(chaines) cad 1000
 
 
+"""Je pense qu'on pourrait faire deux fonctions pour calculer les moyennes selon le parametre (moyenne_chaine(parametre) et moyenne_echant(parametre) et après dans test_convergence(m_chaine, m_echant, nwalkers, step, parametre) appeler les fonctions moyennes avec le parametre"""
+
+# 1. Moyenne pour parametre amplitude de la chaine pour chaque chaine:
+
+#moyenne_chaine = np.array([(1/step)*np.sum(chaines[:,i,0]) for i in range(10)])
+moyenne_chaine = [(1/step)*np.sum(chaines[i,j,0] for i in range(step)) for j in range(nwalkers)]
+
+# 2. Moyenne pour tous les échantillons:
+
+moyenne_echant = (1/nwalkers)*np.sum(moyenne_chaine)
+
+def test_convergence(m_chaine, m_echant, nwalkers, step):
+    
+    # 3. Variance entre chaines:
+
+    """B tient bien vers 0 si on augmente nsteps donc trop bien!"""
+    B = (1/(nwalkers-1))*np.sum([(m_chaine[j]-m_echant)**2 for j in range(nwalkers)])
+
+
+    # 4. Moyenne des variances de chaque chaîne :
+
+    """ Je sais pas si W c'est bien, il est tard là, peut-être que j'ai fait de la merde, si tu    peux vérifier, s'il te plaît <3 """
+
+    """Je pense que c'est pas bien parce que plus on augmente nsteps plus augmente R, ça devrait descendre à 1"""
+
+    W = (1/nwalkers)*np.sum([(1/(step-1))*np.sum([(m_chaine[j]-m_echant)**2 for j in range(nwalkers)]) for i in range(step)])
 
 
 
+    R = ((((step-1)/step) * W) + (((nwalkers-1)/nwalkers) * B))/W
 
+    return(R)
 
+R = test_convergence(moyenne_chaine, moyenne_echant, nwalkers, step)
+# print(R)
 
 
 
