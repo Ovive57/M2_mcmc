@@ -9,7 +9,7 @@ import emcee
 
 def bruit(psd, sigma):
     """
-    Crée du bruit coloré à partir de sa densité spectrale de puissance.
+    Créée du bruit coloré à partir de sa densité spectrale de puissance.
 
     Args:
         psd (array): densité spectrale de puissance du bruit coloré dans l'espace de Fourier.
@@ -84,7 +84,6 @@ def modele(rayons, amp, mu, sigma, rho_0, r_p):
 
 
 
-
 #np.random.seed(45)
 
 n_realis = 1000
@@ -130,12 +129,12 @@ plt.xscale('log')
 plt.show()
 """
 
-# Tableau de valeurs qui semblent adaptés pour la minisation du chi 2
+# Tableau de valeurs qui semblent adaptées pour la minimisation du chi 2
 etat_init = np.array([amp, mu, sigma, rho_0, r_p])
 
 
 
-# Estimation des meileures valeurs des paramètres avec curve_fit:
+# Estimation des meilleures valeurs des paramètres avec curve_fit:
 
 param, pcov = curve_fit(modele, rayons, densite, etat_init)
 
@@ -187,8 +186,8 @@ def proposition(etat_act, dev_act):
     """Fonction de proposition
 
     Args:
-        etat_act (5-array): paramètres iniciaux
-        dev_act (5-array): déviations stabdars associés
+        etat_act (5-array): paramètres initiaux
+        dev_act (5-array): déviations standards associés
 
     Returns:
         5-array: paramètres proposés pour tester
