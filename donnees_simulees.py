@@ -98,8 +98,8 @@ densite = np.load('y.npy')
 psd = np.load('psd.npy')
 freq_psd = np.load('f.npy')
 
-n_realis = 10000
-sigma_bruit = 10**(-3) #cf ennoncé
+n_realis = 1000 # à augmenter pour un bon chi2
+sigma_bruit = 10**(-3) 
 
 
 # Matrice de covariance associée:
@@ -162,20 +162,21 @@ plt.xscale('log')
 plt.show()
 """
 
-# A faire : plusieurs etudes de la valeurs de chi2 en fonction du nombre de realisation du bruit
-""" Calcul de chi2, de-commenter après, ça prends du temps """
+# Calcul de chi2 
+
 chi2 = np.dot(densite-mode_fit, np.dot(cov, densite-mode_fit))
-
-
 #print(chi2)
 
+# On tire 1000 jeux de paramètres aléatoirement, centrés sur les mailleurs paramètres 
 npoints = 1000
 multi_norm = np.random.multivariate_normal(param, pcov, npoints)
 
 
-
+# On trace les contours de confiance de ces paramètres:
 samples = MCSamples(samples=multi_norm)
 ancien_samples = samples
+
+
 # À refaire propre, labels et titre. style plot. (https://getdist.readthedocs.io/en/latest/plot_gallery.html)
 
 """
@@ -201,7 +202,6 @@ def proposition(etat_act, dev_act):
     etat_test = np.random.normal(etat_act, dev_act)
     return etat_test
 
-# Mettre tous les parametres en un vecteur
 theta = [amp, mu, sigma, rho_0, r_p]
 
 #dev_act = np.array([0.1e-2,50,0.2,50,10])
@@ -311,11 +311,11 @@ def algorithme(etat_act, pas, densite, rayons, cov, npas):
 
     Args:
         etat_act (5-array): état actuel, initial
-        pas (5-array): taille possible du pas (déviation standard de chaque état)
+        pas (5-array): déviation standard de chaque état
         densite (array):  densité. y-axis de nos données.
         rayons  (array): rayon. x-axis de nos données.
         cov (matrix): matrice de covariance inverse.
-        npas (int): nombre de pas dont on fait l'algorithme
+        npas (int): nombre de pas que fait l'algorithme
 
     Returns:
         _type_: _description_
@@ -328,10 +328,12 @@ def algorithme(etat_act, pas, densite, rayons, cov, npas):
     return np.array(matrice_param)
 
 
+# Déviations standards utilisées pour la génération des paramètres:
 
 pas = np.array([0.2, 50, 10,0.1e-2,50])
 
 """
+# Chaines de Markov
 chaine = algorithme(theta, pas, densite, rayons, cov, npas = 10000)
 
 
