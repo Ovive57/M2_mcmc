@@ -175,7 +175,7 @@ multi_norm = np.random.multivariate_normal(param, pcov, npoints)
 
 
 samples = MCSamples(samples=multi_norm)
-
+ancien_samples = samples
 # À refaire propre, labels et titre. style plot. (https://getdist.readthedocs.io/en/latest/plot_gallery.html)
 
 """
@@ -353,16 +353,16 @@ plt.show()
 
 ############# EMCEE #########################
 
-
 mat_pos = etat_init
 for i in range(9):
     amp = np.random.uniform(4,15)
-    mu = np.random.uniform(1000,2000)
+    mu = np.random.uniform(1400,1600)
     sigma = np.random.uniform(100,300)
-    rho_0 = np.random.uniform(0.,1)
-    r_p = np.random.uniform(100,1000)
+    rho_0 = np.random.uniform(1e-3,2e-2)
+    r_p = np.random.uniform(200,500)
     etat_init = np.array([amp, mu, sigma, rho_0, r_p])
     mat_pos = np.vstack((mat_pos, etat_init))
+
 
 # nwalkers : nombre de chaines de Markov
 # ndim : nombre de parametres
@@ -371,12 +371,12 @@ nwalkers, ndim = mat_pos.shape
 
 sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [densite, rayons, cov]) 
 
-step = 15000
+step = 8000
 step_burnin = int(0.1*step)
 
 state =sampler.run_mcmc(mat_pos, step_burnin) 
 
-sampler.reset() #burn-in
+#sampler.reset() #burn-in
 
 sampler.run_mcmc(state, step, progress=True)
 
@@ -405,42 +405,8 @@ plt.show()
 
 """
 
-# NB : j - nombre chaines cad 10, i - len(chaines) échantillons cad 1000 
 
-
-
-### J'ai commencé à changer à partir de là:
-### J'ai mis le test de Gelman dans une seule fonction : le R est pas encore bon je pense, j'ai tout testé pourtant dans la fonction, l'erreur vient surement de nos chaines
-
-### OLIVIA RÉPONDS : JE PENSE QUE JE SUIS D'ACCORD, J'AI CHANGÉ UN PEU LES CHOSES POUR LES VOIR PLUS PROPREMENT, ET JE PENSE QUE C'EST BON... 
-
-### OLIVIA: J'ai separé les moyennes en une autre fonction to keep it simple, normalement c'etail une seule chose par fonction...
-
-### OLIVIA: JE PENSE QUE AVEC CETTE DÉFINITION POUR LES MOYENNES EST PLUS PROPRE, TU ME DIRAS CE QUE TU EN PENSES, SINON ON RÉCUPERE CELLE D'AVANT:
-
-def moyennes(chaines, index_param, step, nwalkers, nparam):
-
-    # 1. Moyenne pour parametre de la chaine pour chaque chaine:
-    
-    # Pour la chaine 0:
-    m_chaine = [np.mean(chaines[:,j,index_param]) for j in range(nwalkers)]
-    # C'est un vecteur avec les 10 moyennes de chaque chaine sur toutes les échantillons
-    
-    # 2. Moyenne pour tous les échantillons:
-    
-    m_echant = np.mean(m_chaine)
-    # C'est juste une valeur avec la moyenne des 10 chaines sur les 1000 échantillons
-    
-    return m_chaine, m_echant
-
-
-#step, nwalkers, nparam = chaines.shape
-#a = moyennes(chaines, 0, step, nwalkers, nparam)
-
-
-### OLIVIA: Ici j'ai défini la fonction différement, je sais pas c'est quoi plus claire, je laisse les deux et tu décides si tu veux, je voulais juste voir chaque somme que je faisais:
-
-def test_convergence(chaines, index_param, step, nwalkers, nparam):
+def test_convergence(chaines, index_param):
     """
     Test de convergence de Gelman-Rubin.
     
@@ -449,108 +415,76 @@ def test_convergence(chaines, index_param, step, nwalkers, nparam):
     Returns:
         Le R associé
     """
-    print("step:", step, "nwalkers:", nwalkers)
-    B = 0
-    W = 0
+    step, nwalkers, nparam = chaines.shape
     
-    m_chaine, m_echant = moyennes(chaines,index_param, step, nwalkers, nparam)
+    # 1. Moyenne pour parametre amplitude de la chaine pour chaque chaine:
+
+    m_chaine = [np.mean(chaines[:,j,index_param]) for j in range(nwalkers)]
+
+    # 2. Moyenne pour tous les échantillons:
+    
+    m_echant = np.mean(m_chaine)
     
     # 3. Variance entre chaines:
-    
-    B = 1/(nwalkers-1)*np.sum([(m_chaine[j]-m_echant)**2 for j in range(nwalkers)])
-    print("B=", B)
+
+    B = (1/(nwalkers-1))*sum([(m_chaine[j]-m_echant)**2 for j in range(nwalkers)]) # tend bien vers 0 si on augmente nsteps
     
     # 4. Moyenne des variances de chaque chaîne :
+    
     sum1 = 0
     sum2 = 0
-    
     for j in range(nwalkers):
         for i in range(step):
             sum1 += (chaines[i,j,index_param] - m_chaine[j])**2
         sum2 += 1/(step-1)*sum1
-        
     W = 1/nwalkers*sum2
     
-    print("W=", W)
+    # Pas le même résultat qu'avec ton W je n'arrive pas à voir où est la différence,
+    # le tien donne des meilleurs résultats donc j'ai laissé celui-là
+    #W = (1/nwalkers)*sum(sum((chaines[i, j, index_param]-m_chaine[j])**2 for i in range(step))/(step-1) for j in range(nwalkers))
     
-    # 5. Quantité R:
     
-    R = ((step-1)/step * W + (nwalkers+1)/nwalkers * B)/W
-    
-    return R
-    
-
-#a = test_convergence(chaines, 0, step, nwalkers, nparam)
-#print("R=", a)
-
-
-"""
-
-def test_convergence(chaines, index_param, step, nwalkers, nparam):
-   
-    Test de convergence de Gelman-Rubin.
-    
-    Args:
-        les chaines de Markov et l'index du paramètre que l'on souhaite étudié
-    Returns:
-        Le R associé
-    
-    print("step:", step, "nwalkers:", nwalkers)
-    
-    m_chaine, m_echant = moyennes(chaines,index_param, step, nwalkers, nparam)
-    
-    # 3. Variance entre chaines:
-
-    #B tend bien vers 0 si on augmente nsteps donc trop bien!
-    B = (1/(nwalkers-1))*np.sum([(m_chaine[j]-m_echant)**2 for j in range(nwalkers)])
-    print("B:", B)
-    
-    # 4. Moyenne des variances de chaque chaîne :
-    
-    var_chaine = np.array([np.sum((chaines[i, j, index_param]-m_chaine[j])**2 for i in range(step))/(step-1) for j in range(nwalkers)])
-    
-    W = (1/nwalkers)*np.sum(var_chaine)
-    print("W:", W)
-    #plus on augmente nsteps, plus R se rapproche de 1
-    R = ((step-1)/step * W + (nwalkers+1)/nwalkers * B)/W
+    R = ((step-1)/step * W + (nwalkers+1)/nwalkers * B)/W  # plus on augmente nsteps, plus R se rapproche de 1
 
     return(R)
-"""
 
-### On teste pour chaque paramètre:
+
+
+### On fait le test de Gelman pour chaque paramètre:
+
 step, nwalkers, nparam = chaines.shape
-R_amp = test_convergence(chaines, 0, step, nwalkers, nparam)  # Pour l'amplitude
-"""
+
+R_amp = test_convergence(chaines, 0)  
 R_mu = test_convergence(chaines, 1)
 R_sigma = test_convergence(chaines, 2)
 R_rho0 = test_convergence(chaines, 3)
 R_p = test_convergence(chaines, 4)
-"""
+
 print("On souhaite que R< 1.03 : ")
 
 print("R de l'amplitude:",R_amp)
-"""
 print("R de mu:",R_mu)
 print("R de sigma:",R_sigma)
 print("R de rho 0:",R_rho0)
 print("R de r_p:",R_p)
-"""
 
-### Certaines chaines ca va mais la dernière par exemple est bizarre
+
 
 # Fonction d'autocorrelation de chaque chaine pour chaque parametre:
-# OLIVIA: Ici j'ai fait la boucle pour faire toutes les parametres:
 
 
 for k in range(nparam):
     for j in range(nwalkers):
         f_auto = emcee.autocorr.function_1d(chaines[:,j,k]) # fonction d'autocorrelation
         x = np.linspace(1, step, step)
-    
-        #plt.plot(x, f_auto)
-        #plt.xscale('log')
-        #plt.title(f"Param {k}")
+        """
+        plt.plot(x, f_auto)
+        plt.xscale('log')
+        plt.title(f"Param {k}")
+        """
     #plt.show() # en sortant le plt.show() de la boucle tous les graphes se voit en mêeme temps 
+
+
 
 """ EXAMPLE DE PLOT POUR PLUS TARD
 fig, ax = P.subplots()  # Création d'une figure contenant un seul système d'axes
@@ -563,32 +497,41 @@ ax.legend()
 
 """
 
-# OLIVIA: Normalement on doit voir tous les graphes en même temps pour voir où deux poins des chaînes de Markov ne sont plus correlés ! On va faire des figures prochainement dans le script plots
 
-# Temps d'autocorrelation:
+# Temps d'autocorrelation: ( temps entre 2 points des chaines pour qu'ils soient independants )
+# Quand je l'ai run pour 8000 il n'y avait plus d'erreur, je garde ton chiffre de 250*50 = 12500 ici au cas où
 
-# OLIVIA: Le tau marche pas à cause de que nos chaines convergent pas... c'est pour ça commenté, j'ai continué en inventant un tau plus tard.
-""" 
 tau = sampler.get_autocorr_time() # Il donne un array de 5 valeurs (1 par parametre) avec le nombre de pas dont la chaine a besoin pour "oublier où elle a commencé."
-print(tau) 
-"""
-# Quand j'ai run tau avec 3000 pas il m'a dit: The chain is shorter than 50 times the integrated autocorrelation time for 5 parameter(s). Use this estimate with caution and run a longer chain! N/50 = 60; tau: [249.76784442 249.27214463 270.99923593 245.43068162 157.99109379] 
-# avec ces données du coup je pense que la chaine doit être de minimum 250*50 = 12500. Alors 13000 ça semblerait bien à mon avis
-# Plus j'augmente le numero de steps, plus ça augmente le temps de correlation et du coup plus de steps me demande d'ajouter. Je pense qu'il faut réparer le truc d'avant...
+print("temps d'autocorrelation:", tau) 
 
 
-#ndiscard = (np.max(tau))*3
-#nthin =(np.max(tau))/2
-ndiscard = 100
-nthin = 15
+# Maintenant on reprend les chaines en faisant le burning et temps d'autocorrelation + on applatit pour avoir tout
 
-flat_samples = sampler.get_chain(discard=ndiscard, thin = nthin, flat = True)
+ndiscard = int(np.max(tau))*3 # pourquoi? le tau est à environ 70, **3 ca fait dans les 600 000, on a pas autant de données
+nthin = int(np.max(tau))/2  # tu as trouvé ça où? il me semble qu'il disait qu'on estimait à l'oeil, sur le graphe pour être large 1000 me parait bien
+
+
+flat_samples = sampler.get_chain(flat=True, thin=100, discard = 1000)
+
+
 print("(nb points pris, nb parametres) = ", np.shape(flat_samples)) #(a,b) où a = nb de pas qu'il dessine finalement et b = nb de parametres
 
 # OLIVIA: et ça c'est le plot, ça marche pas encore, mais on peut le laisser pour la fin avec le script plots, ça se fait pas comme ça en fait, il faut voir ce qu'on a fait avant.
 
-labels = ["amp","mu","sigma"," rho_0","r_p"] #parametres
-fig = corner.corner(flat_samples, labels=labels, truths=etat_init)
+names = ["amp","mu","sigma"," rho_0","r_p"] #parametres
+#fig = corner.corner(flat_samples, labels=labels, truths=etat_init)
+
+samples = MCSamples(samples=flat_samples, names = names)
+
+
+# J'ai essayé de plot les deux en même temps (cf ligne 177 environ pour l'ancien samples que j'ai figé sur une variable ancien sample
+# Ca n'en met qu'un, peut-être parce que dans l'ancien on ne fait pas le thin et le discard? ou le flat?
+g = plots.get_subplot_plotter()
+g.triangle_plot([samples, ancien_samples],  legend_labels = [ "mcmc","ancien"], filled=True)
+plt.show()
+g.export('image2.pdf')
+
+
 
 
 # OIVIA: J'ai commencé une liste avec les trucs qu'il reste à faire, on peut la remplire et la vider selon on avance:
