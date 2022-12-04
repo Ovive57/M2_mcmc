@@ -83,14 +83,14 @@ def modele(rayons, amp, mu, sigma, rho_0, r_p):
     mod = modele_init(rayons, rho_0, r_p )
     mod += amp*stats.norm.pdf(rayons, mu,sigma)
     return mod
+    
+    
+    
+
+################## Minimisation du chi2 ####################
 
 
 
-#np.random.seed(45)
-
-n_realis = 1000
-
-sigma_bruit = 10**(-3) #cf ennoncé
 
 
 rayons = np.load('r.npy')
@@ -99,7 +99,7 @@ psd = np.load('psd.npy')
 freq_psd = np.load('f.npy')
 
 n_realis = 10000
-
+sigma_bruit = 10**(-3) #cf ennoncé
 
 
 # Matrice de covariance associée:
@@ -160,8 +160,8 @@ plt.plot(rayons, mode_fit)
 plt.plot(rayons, densite)
 plt.xscale('log')
 plt.show()
-
 """
+
 # A faire : plusieurs etudes de la valeurs de chi2 en fonction du nombre de realisation du bruit
 """ Calcul de chi2, de-commenter après, ça prends du temps """
 chi2 = np.dot(densite-mode_fit, np.dot(cov, densite-mode_fit))
@@ -264,15 +264,7 @@ def log_probability(theta, d, r, cov):
     if not np.isfinite(lp):
         return -np.inf
     ll = log_likelihood(theta, d = d, r = r, cov = cov)
-    #print(ll)
     return lp + ll # si on ne specifie pas d =  et r = ça reconnais pas, c'est pour ça que j'ai mis des noms plus courts aussi (d et r en lieu de densité et rayons)
-
-
-
-# Exemple
-#a = log_probability(*theta, d = densite, r = rayons, cov = cov)
-#print("test proba", a)
-
 
 def log_acceptance(etat_act, etat_test, densite, rayons, cov):
     """Logarithme du rapport d'acceptance à partir des paramétres initiaux et proposés
@@ -288,15 +280,8 @@ def log_acceptance(etat_act, etat_test, densite, rayons, cov):
         float: Acceptance (en log)
     """
     test = log_probability(etat_test, d = densite, r = rayons, cov = cov)
-    #print("test", test)
     act = log_probability(etat_act, d = densite, r = rayons, cov = cov)
-    #print("act", act)
     return test-act
-
-#a = log_acceptance(theta, prop, densite, rayons, cov)
-#print("theta", theta)
-#print("prop",prop)
-#print("alpha", np.exp(a))
 
 
 def test_param(etat_act, dev_act, densite, rayons, cov):
@@ -314,9 +299,7 @@ def test_param(etat_act, dev_act, densite, rayons, cov):
     """
     u = np.random.uniform(0.0,1.0)
     etat_test = proposition(etat_act, dev_act)
-    #print("etat_test", etat_test)
     alpha = np.exp(log_acceptance(etat_act, etat_test, densite, rayons, cov))
-    #print("alpha", alpha) # alpha est toujours 0
     if u <= alpha :
         
         return etat_test # On accepte les nouveaux paramètres
@@ -341,7 +324,7 @@ def algorithme(etat_act, pas, densite, rayons, cov, npas):
     for i in range(npas):
         new = test_param(etat_act, pas, densite, rayons, cov)
         matrice_param.append(new)
-        etat_act = new # Avant on faisait pas ça, on partait tout le temps de l'etat initial, du coup on bougeait jamais.   
+        etat_act = new 
     return np.array(matrice_param)
 
 
@@ -386,9 +369,9 @@ for i in range(9):
 nwalkers, ndim = mat_pos.shape
 
 
-sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [densite, rayons, cov]) # State marchait pas parce que on avait args = [rayons, densite, cov] xd
+sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [densite, rayons, cov]) 
 
-step = 1000
+step = 3000
 step_burnin = int(0.1*step)
 
 state =sampler.run_mcmc(mat_pos, step_burnin) 
@@ -399,12 +382,13 @@ sampler.run_mcmc(state, step, progress=True)
 
 
 chaines = sampler.get_chain()
+
 print("shape de chaines:", np.shape(chaines)) # On a 10 chaines, de 1000 échantillons avec 5 parametres chaque chaine.
-print("shape échantillons",np.shape(chaines[0])) # Il y en a 1000 échantillons
+print("shape échantillons",np.shape(chaines[0])) # Il y a 1000 échantillons
 print("shape premiere chaine", np.shape(chaines[:,0,:])) # 1000 échantillons 5 parametres
 # chaines[a,b,c] où a = échantillons(1000), b = chaines(10), c = paramétres(5)
 
-# On peut dessiner histograms de ces samples pour obtenir une estimation de la densité qu'on sample:
+# On peut dessiner des histogrammes de ces samples pour obtenir une estimation de la densité qu'on sample:
 
 """
 plt.hist(chaines[:, 1], 100, histtype="step")
@@ -427,50 +411,82 @@ plt.show()
 #print(np.shape(chaines))
 
 
-# test de convergence Gelman-Rubin
-# Florian m'a dit qu'il faut faire un test pour chaque parametre !
-# Je vais faire pour l'amplitude
 
 # NB : j - nombre chaines cad 10, i - len(chaines) cad 1000
 
 
-"""Je pense qu'on pourrait faire deux fonctions pour calculer les moyennes selon le parametre (moyenne_chaine(parametre) et moyenne_echant(parametre) et après dans test_convergence(m_chaine, m_echant, nwalkers, step, parametre) appeler les fonctions moyennes avec le parametre"""
 
-# 1. Moyenne pour parametre amplitude de la chaine pour chaque chaine:
+### J'ai commencé à changer à partir de là:
+### J'ai mis le test de Gelman dans une seule fonction : le R est pas encore bon je pense, j'ai tout testé pourtant dans la fonction, l'erreur vient surement de nos chaines
 
-#moyenne_chaine = np.array([(1/step)*np.sum(chaines[:,i,0]) for i in range(10)])
-moyenne_chaine = [(1/step)*np.sum(chaines[i,j,0] for i in range(step)) for j in range(nwalkers)]
 
-# 2. Moyenne pour tous les échantillons:
 
-moyenne_echant = (1/nwalkers)*np.sum(moyenne_chaine)
-
-def test_convergence(m_chaine, m_echant, nwalkers, step):
+def test_convergence(chaines, index_param):
+    """
+    Test de convergence de Gelman-Rubin.
     
+    Args:
+        les chaines de Markov et l'index du paramètre que l'on souhaite étudié
+    Returns:
+        Le R associé
+    """
+    step, nwalkers, nparam = chaines.shape
+    print("step:", step, "nwalkers:", nwalkers)
+    # 1. Moyenne pour parametre amplitude de la chaine pour chaque chaine:
+
+    m_chaine = np.array([(1/step)*sum(chaines[i,j,index_param] for i in range(step)) for j in range(nwalkers)])
+    # 2. Moyenne pour tous les échantillons:
+    
+    m_echant = (1/nwalkers)*np.sum(m_chaine)
     # 3. Variance entre chaines:
 
-    """B tient bien vers 0 si on augmente nsteps donc trop bien!"""
-    B = (1/(nwalkers-1))*np.sum([(m_chaine[j]-m_echant)**2 for j in range(nwalkers)])
-
-
+    """B tend bien vers 0 si on augmente nsteps donc trop bien!"""
+    B = (1/(nwalkers-1))*sum([(m_chaine[j]-m_echant)**2 for j in range(nwalkers)])
+    print("B:", B)
+    
     # 4. Moyenne des variances de chaque chaîne :
-
-    """ Je sais pas si W c'est bien, il est tard là, peut-être que j'ai fait de la merde, si tu    peux vérifier, s'il te plaît <3 """
-
-    """Je pense que c'est pas bien parce que plus on augmente nsteps plus augmente R, ça devrait descendre à 1"""
-
-    W = (1/nwalkers)*np.sum([(1/(step-1))*np.sum([(m_chaine[j]-m_echant)**2 for j in range(nwalkers)]) for i in range(step)])
-
-
-
-    R = ((((step-1)/step) * W) + (((nwalkers-1)/nwalkers) * B))/W
+    
+    var_chaine = np.array([sum((chaines[i, j, index_param]-m_chaine[j])**2 for i in range(step))/(step-1) for j in range(nwalkers)])
+    
+    W = (1/nwalkers)*sum(var_chaine)
+    print("W:", W)
+    """plus on augmente nsteps, plus R se rapproche de 1"""
+    R = ((step-1)/step * W + (nwalkers+1)/nwalkers * B)/W
 
     return(R)
 
-R = test_convergence(moyenne_chaine, moyenne_echant, nwalkers, step)
-# print(R)
+### On teste pour chaque paramètre:
+
+R_amp = test_convergence(chaines, 0)  # Pour l'amplitude
+"""
+R_mu = test_convergence(chaines, 1)
+R_sigma = test_convergence(chaines, 2)
+R_rho0 = test_convergence(chaines, 3)
+R_p = test_convergence(chaines, 4)
+"""
+print("On souhaite que R< 1.03 : ")
+
+print("R de l'amplitude:",R_amp)
+"""
+print("R de mu:",R_mu)
+print("R de sigma:",R_sigma)
+print("R de rho 0:",R_rho0)
+print("R de r_p:",R_p)
+"""
+
+### Là j'ai juste ecrit les fonction d'autocorrelation pour l'amplitude, il faudra le faire pour tous les paramètres apres
+### Certaines chaines ca va mais la dernière par exemple est bizarre
+
+# Fonction d'autocorrelation de chaque chaine: (pour l'amplitude seulement)
+
+for j in range(10):
+    f_auto = emcee.autocorr.function_1d(chaines[:,j,0]) # fonction d'autocorrelation
+    x = np.linspace(1, step, step)
+    
+    plt.plot(x, f_auto)
+    plt.xscale('log')
+    plt.title(f"Chaine{j}")
+    plt.show() # en sortant le plt.show() de la boucle tous les graphes se voit en mêeme temps 
 
 
-
-
-
+### Du coup je propose qu'on continue comme si de rien n'était et peut etre qu'on verra l'erreur apres? ca doit petre la meme pour les deux
