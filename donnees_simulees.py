@@ -7,6 +7,8 @@ from getdist import plots, MCSamples
 import emcee
 import corner
 
+########## MAXIMUM DE VRAISEMBLANCE ##########
+
 def bruit(psd, sigma):
     """
     Créée du bruit coloré à partir de sa densité spectrale de puissance.
@@ -93,10 +95,8 @@ densite = np.load('y.npy')
 psd = np.load('psd.npy')
 freq_psd = np.load('f.npy')
 
-
 # Matrice de covariance associée au bruit:
-
-n_realis_bruit = 1000 # à augmenter pour un bon chi2
+n_realis_bruit = 10000
 sigma_bruit = 10**(-3)
 cov = covariance(psd, rayons, n_realis_bruit,  sigma_bruit)
 
@@ -109,29 +109,20 @@ rho_0 = 0.010
 r_p = 900
 etat_est = np.array([amp, mu, sigma, rho_0, r_p])
 
-# Valeurs un peu plus loin pour plus tard voir qu'ils rejoinent la distribution de densité :
-amp = 4.5
-mu = 800
-sigma = 100
-rho_0 = 0.015
-r_p = 900
-
-theta_init = np.array([amp, mu, sigma, rho_0, r_p])
-
 # Estimation des meilleures valeurs des paramètres avec curve_fit:
-
 param, pcov = curve_fit(modele, rayons, densite, etat_est) # où param = [amp, mu, sigma, rho_0, r_p]
-
 mode_fit = modele(rayons, *param)
 
-# Calcul de chi2
+# Calcul de chi2 associé au meilleur ajustement :
 chi2 = np.dot(densite-mode_fit, np.dot(cov, densite-mode_fit))
 
 # On tire 1000 jeux de paramètres aléatoirement, centrés sur les mailleurs paramètres 
 npoints = 1000
 multi_norm = np.random.multivariate_normal(param, pcov, npoints)
 
-################# MCMC #####################
+# Plot contours de confiance maximum de vraisemblance en script plots.py
+
+##################### MCMC #####################
 
 def proposition(etat_act, dev_act):
     """Fonction de proposition
@@ -149,9 +140,10 @@ def proposition(etat_act, dev_act):
 
 def log_prior(theta):
     """Verification que les parametres sont logiques
-
+    Args:
+        theta (5-array): paramètres
     Returns:
-        int/float: 0 (int) si valide -inf(float) si pas valide
+        int/float: 0 (int) si valides -inf(float) si pas valides
     """
     if theta[0] > 0 \
     and theta[1] > 0 \
@@ -247,7 +239,7 @@ def algorithme(etat_act, sig_pas, densite, rayons, cov, npas):
         npas (int): nombre de pas que fait l'algorithme
 
     Returns:
-        _type_: _description_
+        matrix(npas x nombre de parametres): matrice des parametres
     """
     matrice_param = []
     for i in range(npas):
@@ -256,6 +248,14 @@ def algorithme(etat_act, sig_pas, densite, rayons, cov, npas):
         etat_act = new 
     return np.array(matrice_param)
 
+# Valeurs un peu plus loin pour plus tard voir qu'ils rejoinent la distribution de densité :
+amp = 4.5
+mu = 800
+sigma = 100
+rho_0 = 0.015
+r_p = 900
+
+theta_init = np.array([amp, mu, sigma, rho_0, r_p])
 
 # Déviations standards utilisées des paramètres:
 sig_pas = np.array([0.2, 50, 10,0.1e-2,50])
@@ -268,96 +268,76 @@ r_p_ev = chaine[:,4]
 
 ############# EMCEE #########################
 
-mat_pos = etat_est
-for i in range(9):
-    amp = np.random.uniform(4,15)
-    mu = np.random.uniform(1400,1600)
-    sigma = np.random.uniform(100,300)
-    rho_0 = np.random.uniform(1e-3,2e-2)
-    r_p = np.random.uniform(200,500)
-    etat_init = np.array([amp, mu, sigma, rho_0, r_p])
-    mat_pos = np.vstack((mat_pos, etat_init))
+def position(theta_init, nwalkers):
+    """Fonction qui donne differents possitions initiales possibles avec nos données
 
+    Args:
+        theta_init (5-array): état initial
+        nwalkers (int) : nombre de chaînes de Markov
 
-# nwalkers : nombre de chaines de Markov
-# ndim : nombre de parametres
-nwalkers, ndim = mat_pos.shape
-
-sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [densite, rayons, cov]) 
-
-step = 8000
-step_burnin = int(0.1*step)
-
-state =sampler.run_mcmc(mat_pos, step_burnin) 
-
-sampler.reset() #burn-in
-
-sampler.run_mcmc(state, step, progress=True)
-
-
-chaines = sampler.get_chain()
-# chaines[a,b,c] où a = échantillons(1000), b = chaines(10), c = paramétres(5)
-
-# On peut dessiner des histogrammes de ces samples pour obtenir une estimation de la densité qu'on sample:
-
-"""
-plt.hist(chaines[:, 1], 100, histtype="step")
-
-plt.hist(chaines[:, 2], 100, histtype="step")
-plt.hist(chaines[:, 3], 100, histtype="step")
-plt.hist(chaines[:, 4], 100, histtype="step")
-plt.hist(chaines[:, 0], 100, histtype="step")
-
-plt.xlabel(r"$\theta_1$")
-plt.ylabel(r"$p(\theta_1)$")
-plt.gca().set_yticks([]);
-plt.show()
-
-"""
+    Returns:
+        matrix(nwalkers x nparametres): matrice des parametres initiaux pour chaque chaîne
+    """
+    mat_pos = theta_init
+    for i in range(nwalkers-1):
+        amp = np.random.uniform(4,15)
+        mu = np.random.uniform(1400,1600)
+        sigma = np.random.uniform(100,300)
+        rho_0 = np.random.uniform(1e-3,2e-2)
+        r_p = np.random.uniform(200,500)
+        etat_init = np.array([amp, mu, sigma, rho_0, r_p])
+        mat_pos = np.vstack((mat_pos, etat_init))
+    return mat_pos
 
 
 def test_convergence(chaines, index_param):
     """
     Test de convergence de Gelman-Rubin.
-    
+
     Args:
-        les chaines de Markov et l'index du paramètre que l'on souhaite étudié
+        chaines (array) : les chaines de Markov
+        index_param (int) : l'index du paramètre que l'on souhaite étudié
     Returns:
         Le R associé
     """
     step, nwalkers, nparam = chaines.shape
-    
+
     # 1. Moyenne pour parametre amplitude de la chaine pour chaque chaine:
 
-    m_chaine = [np.mean(chaines[:,j,index_param]) for j in range(nwalkers)]
+    m_chaine = [np.mean(chaines[:, j, index_param]) for j in range(nwalkers)]
 
     # 2. Moyenne pour tous les échantillons:
-    
+
     m_echant = np.mean(m_chaine)
-    
+
     # 3. Variance entre chaines:
 
-    B = (1/(nwalkers-1))*sum([(m_chaine[j]-m_echant)**2 for j in range(nwalkers)]) # tend bien vers 0 si on augmente nsteps
-    
+    B = (1 / (nwalkers - 1)) * sum(
+        [(m_chaine[j] - m_echant) ** 2 for j in range(nwalkers)])  # tend bien vers 0 si on augmente nsteps
+
     # 4. Moyenne des variances de chaque chaîne :
-    
+
     sum1 = 0
     sum2 = 0
     for j in range(nwalkers):
         for i in range(step):
-            sum1 += (chaines[i,j,index_param] - m_chaine[j])**2
-        sum2 += 1/(step-1)*sum1
-    W = 1/nwalkers*sum2
-    
-    # Pas le même résultat qu'avec ton W je n'arrive pas à voir où est la différence,
-    # le tien donne des meilleurs résultats donc j'ai laissé celui-là
-    #W = (1/nwalkers)*sum(sum((chaines[i, j, index_param]-m_chaine[j])**2 for i in range(step))/(step-1) for j in range(nwalkers))
-    
-    
-    R = ((step-1)/step * W + (nwalkers+1)/nwalkers * B)/W  # plus on augmente nsteps, plus R se rapproche de 1
+            sum1 += (chaines[i, j, index_param] - m_chaine[j]) ** 2
+        sum2 += 1 / (step - 1) * sum1
+    W = 1 / nwalkers * sum2
 
-    return(R)
+    R = ((step - 1) / step * W + (nwalkers + 1) / nwalkers * B) / W  # plus on augmente nsteps, plus R se rapproche de 1
 
+    return (R)
+
+nwalkers = 10 # Nombre chaines de Markov
+ndim = len(theta_init) # Nombre de paramètres
+mat_pos = position(theta_init,nwalkers)
+step = 8000
+step_burnin = int(0.1*step)
+
+sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [densite, rayons, cov])
+sampler.run_mcmc(mat_pos,step)
+chaines = sampler.get_chain(discard=step_burnin) # chaines[a,b,c] où a = échantillons(1000), b = chaines(10), c = paramétres(5)
 
 
 ### On fait le test de Gelman pour chaque paramètre:
@@ -368,81 +348,27 @@ R_amp = test_convergence(chaines, 0)
 R_mu = test_convergence(chaines, 1)
 R_sigma = test_convergence(chaines, 2)
 R_rho0 = test_convergence(chaines, 3)
-R_p = test_convergence(chaines, 4)
-
-print("On souhaite que R< 1.03 : ")
-
-print("R de l'amplitude:",R_amp)
-print("R de mu:",R_mu)
-print("R de sigma:",R_sigma)
-print("R de rho 0:",R_rho0)
-print("R de r_p:",R_p)
-
+R_rp = test_convergence(chaines, 4)
 
 
 # Fonction d'autocorrelation de chaque chaine pour chaque parametre:
 
-
+""" Vous pouvez le trouver pas commenté dans le script plots.py vu que c'est là bas qu'on l'utilise"""
+"""
 for k in range(nparam):
     for j in range(nwalkers):
         f_auto = emcee.autocorr.function_1d(chaines[:,j,k]) # fonction d'autocorrelation
         x = np.linspace(1, step, step)
-        """
-        plt.plot(x, f_auto)
-        plt.xscale('log')
-        plt.title(f"Param {k}")
-        """
-    #plt.show() # en sortant le plt.show() de la boucle tous les graphes se voit en mêeme temps 
-
-
-
-""" EXAMPLE DE PLOT POUR PLUS TARD
-fig, ax = P.subplots()  # Création d'une figure contenant un seul système d'axes
-ax.plot(x, N.sin(x), c='b', ls='-', label="Sinus")    # Courbe y = sin(x)
-ax.plot(x, N.cos(x), c='r', ls=':', label="Cosinus")  # Courbe y = cos(x)
-ax.set_xlabel("x [rad]")          # Nom de l'axe des x
-ax.set_ylabel("y")                # Nom de l'axe des y
-ax.set_title("Sinus et Cosinus")  # Titre de la figure
-ax.legend() 
 
 """
-
-
 # Temps d'autocorrelation: ( temps entre 2 points des chaines pour qu'ils soient independants )
-# Quand je l'ai run pour 8000 il n'y avait plus d'erreur, je garde ton chiffre de 250*50 = 12500 ici au cas où
-
 tau = sampler.get_autocorr_time() # Il donne un array de 5 valeurs (1 par parametre) avec le nombre de pas dont la chaine a besoin pour "oublier où elle a commencé."
-print("temps d'autocorrelation:", tau) 
-
 
 # Maintenant on reprend les chaines en faisant le burning et temps d'autocorrelation + on applatit pour avoir tout
 
-ndiscard = int(np.max(tau))*3 # pourquoi? le tau est à environ 70, **3 ca fait dans les 600 000, on a pas autant de données
-nthin = int(np.max(tau))/2  # tu as trouvé ça où? il me semble qu'il disait qu'on estimait à l'oeil, sur le graphe pour être large 1000 me parait bien
-
-
-flat_samples = sampler.get_chain(flat=True, thin=100, discard = 1000)
-
-
-print("(nb points pris, nb parametres) = ", np.shape(flat_samples)) #(a,b) où a = nb de pas qu'il dessine finalement et b = nb de parametres
-
-# OLIVIA: et ça c'est le plot, ça marche pas encore, mais on peut le laisser pour la fin avec le script plots, ça se fait pas comme ça en fait, il faut voir ce qu'on a fait avant.
-
-names = ["amp","mu","sigma"," rho_0","r_p"] #parametres
-#fig = corner.corner(flat_samples, labels=labels, truths=etat_init)
-
-samples = MCSamples(samples=flat_samples, names = names)
-
-
-"""
-# J'ai essayé de plot les deux en même temps (cf ligne 177 environ pour l'ancien samples que j'ai figé sur une variable ancien sample
-# Ca n'en met qu'un, peut-être parce que dans l'ancien on ne fait pas le thin et le discard? ou le flat?
-g = plots.get_subplot_plotter()
-g.triangle_plot([samples, samples_vraisem],  legend_labels = [ "mcmc","ancien"], filled=True)
-plt.show()
-g.export('image2.pdf')
-"""
-
+ndiscard = int(np.max(tau))*4
+nthin = 50
+flat_chaines = sampler.get_chain(discard=ndiscard, thin=nthin, flat=True) # où flat_samples[a,b] :  a = nb de pas qu'on prend finalement et b = nb de parametres
 
 
 # OIVIA: J'ai commencé une liste avec les trucs qu'il reste à faire, on peut la remplire et la vider selon on avance:
@@ -453,7 +379,6 @@ g.export('image2.pdf')
 # Temps
 # Emission Tracker code carbon
 # Rapport
-# Plots
 
 
 
