@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from getdist import plots, MCSamples
 import numpy as np
 import emcee
+import os
 
 
 # Outils :
@@ -32,8 +33,20 @@ print("R de sigma:", m.R_sigma)
 print("R de rho 0:", m.R_rho0)
 print("R de r_p:", m.R_rp)
 
-print("temps d'autocorrelation:", m.tau, "un peu moins de l'ordre de 10**2 comme on pouvait voir dans les plots d'autocorrelation")
+print("temps d'autocorrelation pour chaque paramètre:", m.tau, "un peu moins de l'ordre de 10**2 comme on pouvait voir dans les plots d'autocorrelation")
 
+print("Le temps d'éxecution de notre MCMC : ", m.t_mcmc_10, "s, et de la librairie emcee : ", m.t_emcee, "s.")
+
+mcmc_emissions = np.loadtxt('emissions.csv', skiprows=1, max_rows = 1, usecols=(4), unpack=True, delimiter=',')
+emcee_emissions = np.loadtxt('emissions.csv', skiprows=2,max_rows = 1, usecols=(4), unpack=True, delimiter=',')
+
+mcmc_emissions_rate = np.loadtxt('emissions.csv', skiprows=1, max_rows = 1, usecols=(5), unpack=True, delimiter=',')
+emcee_emissions_rate = np.loadtxt('emissions.csv', skiprows=2, max_rows = 1, usecols=(5), unpack=True, delimiter=',')
+
+print("Emissions de notre MCMC : ", mcmc_emissions*10, ", avec un taux d'emissions : ", mcmc_emissions_rate) # Fois 10 parce que 10 chaînes
+print("Emissions de emcee : ", emcee_emissions, ", avec un taux d'emissions : ", emcee_emissions_rate)
+
+os.remove('emissions.csv')
 
 ### Modèle sans structure en train de fusionner ###
 

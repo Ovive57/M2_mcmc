@@ -1,11 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import scipy.stats as stats
 from scipy.optimize import curve_fit
-import getdist
-from getdist import plots, MCSamples
 import emcee
-import corner
+import time
+from codecarbon import EmissionsTracker
 
 ########## MAXIMUM DE VRAISEMBLANCE ##########
 
@@ -248,6 +246,13 @@ def algorithme(etat_act, sig_pas, densite, rayons, cov, npas):
         etat_act = new 
     return np.array(matrice_param)
 
+# Parenthèse time et EmissionsTracker :
+start_mcmc = time.time()
+
+tracker_mcmc = EmissionsTracker()
+tracker_mcmc.start()
+
+
 # Valeurs un peu plus loin pour plus tard voir qu'ils rejoinent la distribution de densité :
 amp = 4.5
 mu = 800
@@ -264,6 +269,13 @@ sig_pas = np.array([0.2, 50, 10,0.1e-2,50])
 chaine = algorithme(theta_init, sig_pas, densite, rayons, cov, npas = 10000)
 rho_0_ev = chaine[:,3]
 r_p_ev = chaine[:,4]
+
+# Parenthèse time et EmissionsTracker :
+end_mcmc = time.time()
+t_mcmc = end_mcmc - start_mcmc
+t_mcmc_10 = t_mcmc*10 # Temps pour 10 chaînes
+
+tracker_mcmc.stop() # Juste pour une chaîne, il faudra multiplier fois 10
 
 
 ############# EMCEE #########################
@@ -329,16 +341,23 @@ def test_convergence(chaines, index_param):
 
     return (R)
 
+
+
 nwalkers = 10 # Nombre chaines de Markov
 ndim = len(theta_init) # Nombre de paramètres
 mat_pos = position(theta_init,nwalkers)
-step = 8000
+step = 10000
 step_burnin = int(0.1*step)
 
-sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [densite, rayons, cov])
-sampler.run_mcmc(mat_pos,step)
-chaines = sampler.get_chain(discard=step_burnin) # chaines[a,b,c] où a = échantillons(1000), b = chaines(10), c = paramétres(5)
+# Parenthèse time et EmissionsTracker :
+start_emcee = time.time()
 
+tracker_emcee = EmissionsTracker()
+tracker_emcee.start()
+
+sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args = [densite, rayons, cov])
+sampler.run_mcmc(mat_pos,step, progress=True)
+chaines = sampler.get_chain(discard=step_burnin) # chaines[a,b,c] où a = échantillons(1000), b = chaines(10), c = paramétres(5)
 
 ### On fait le test de Gelman pour chaque paramètre:
 
@@ -366,18 +385,18 @@ tau = sampler.get_autocorr_time() # Il donne un array de 5 valeurs (1 par parame
 
 # Maintenant on reprend les chaines en faisant le burning et temps d'autocorrelation + on applatit pour avoir tout
 
+
 ndiscard = int(np.max(tau))*4
 nthin = 50
 flat_chaines = sampler.get_chain(discard=ndiscard, thin=nthin, flat=True) # où flat_samples[a,b] :  a = nb de pas qu'on prend finalement et b = nb de parametres
 
+# Parenthèse time et EmissionsTracker :
+end_emcee = time.time()
+t_emcee = end_emcee - start_emcee # temps déjà pour 10 chaînes
 
-# OIVIA: J'ai commencé une liste avec les trucs qu'il reste à faire, on peut la remplire et la vider selon on avance:
+tracker_emcee.stop() # déjà pour 10 chaînes
 
-
-# TO DO : 
-
-# Temps
-# Emission Tracker code carbon
+# TO DO :
 # Rapport
 
 
