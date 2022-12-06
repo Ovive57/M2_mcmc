@@ -24,7 +24,7 @@ print("Le calcul de chi_2 avec le meilleur ajustement: chi_2 = ", m.chi2, "qui e
 
 # Test Gelman-Rubin pour chaque paramètre :
 
-print("On considérera que les chaînes ont convergé si R < 1.03 : ")
+print("On considérera que les chaînes ont convergé si R < 1.03, avec ",m.step, " pas :")
 
 print("R de l'amplitude:",m.R_amp)
 print("R de mu:", m.R_mu)
