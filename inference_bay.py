@@ -386,7 +386,7 @@ tau = sampler.get_autocorr_time() # Il donne un array de 5 valeurs (1 par parame
 
 
 ndiscard = int(np.max(tau))*4
-nthin = int(np.max(tau))/4
+nthin = int(int(np.max(tau))/2)
 flat_chaines = sampler.get_chain(discard=ndiscard, thin=nthin, flat=True) # où flat_samples[a,b] :  a = nb de pas qu'on prend finalement et b = nb de parametres
 
 # Parenthèse time et EmissionsTracker :
@@ -394,9 +394,6 @@ end_emcee = time.time()
 t_emcee = end_emcee - start_emcee # temps déjà pour 10 chaînes
 
 tracker_emcee.stop() # déjà pour 10 chaînes
-
-# TO DO :
-# Rapport
 
 
 
