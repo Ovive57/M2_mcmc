@@ -1,6 +1,5 @@
-import donnees_simulees
 import style
-import donnees_simulees as m
+import inference_bay as m
 import matplotlib.pyplot as plt
 from getdist import plots, MCSamples
 import numpy as np
