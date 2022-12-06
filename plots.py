@@ -10,8 +10,7 @@ import os
 # Outils :
 
 plt.style.use(style.style1)
-# Ici il faut mettre le path au dossier plots qui existe :
-path2plot = 'C:/Users/Olivia/m2cosmo/mcmc/plots/'
+path2plot = 'plots/'
 
 ### Some prints :
 
