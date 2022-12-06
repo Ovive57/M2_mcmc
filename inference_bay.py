@@ -63,7 +63,6 @@ def modele_init(r, rho_0, r_p ):
     b=5.5
     c=0.31
     mod = rho_0 /(((r/r_p)**c)*(1+(r/r_p)**a)**((b-c)/a))
-    #print(rho_0, r_p)
     return mod
 
 def modele(rayons, amp, mu, sigma, rho_0, r_p):
@@ -387,7 +386,7 @@ tau = sampler.get_autocorr_time() # Il donne un array de 5 valeurs (1 par parame
 
 
 ndiscard = int(np.max(tau))*4
-nthin = 50
+nthin = int(np.max(tau))/4
 flat_chaines = sampler.get_chain(discard=ndiscard, thin=nthin, flat=True) # où flat_samples[a,b] :  a = nb de pas qu'on prend finalement et b = nb de parametres
 
 # Parenthèse time et EmissionsTracker :
