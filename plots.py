@@ -23,7 +23,7 @@ print("Le calcul de chi_2 avec le meilleur ajustement: chi_2 = ", m.chi2, "qui e
 
 # Test Gelman-Rubin pour chaque paramètre :
 
-print("On considérera que les chaînes ont convergé si R < 1.03, avec ",m.step, " pas :")
+print("On considérera que les chaînes ont convergé si R < 1.03, avec ", m.step, " pas :")
 
 print("R de l'amplitude:",m.R_amp)
 print("R de mu:", m.R_mu)
@@ -31,7 +31,8 @@ print("R de sigma:", m.R_sigma)
 print("R de rho 0:", m.R_rho0)
 print("R de r_p:", m.R_rp)
 
-print("temps d'autocorrelation pour chaque paramètre:", m.tau)
+print("temps d'autocorrelation pour chaque paramètre : [t_amp, t_mu, t_sigma, t_rho_0, t_r_p] = ", m.tau)
+
 
 print("Le temps d'éxecution de notre MCMC : ", m.t_mcmc_10, "s, et de la librairie emcee : ", m.t_emcee, "s.")
 
@@ -41,10 +42,11 @@ emcee_emissions = np.loadtxt('emissions.csv', skiprows=2,max_rows = 1, usecols=(
 mcmc_emissions_rate = np.loadtxt('emissions.csv', skiprows=1, max_rows = 1, usecols=(5), unpack=True, delimiter=',')
 emcee_emissions_rate = np.loadtxt('emissions.csv', skiprows=2, max_rows = 1, usecols=(5), unpack=True, delimiter=',')
 
-print("Émissions de notre MCMC : ", mcmc_emissions*10, ", avec un taux d'émission : ", mcmc_emissions_rate) # Fois 10 parce que 10 chaînes
-print("Émissions de emcee : ", emcee_emissions, ", avec un taux d'émission : ", emcee_emissions_rate)
+print("Émissions de notre MCMC : ", mcmc_emissions*10," W, avec un taux d'émission : ", mcmc_emissions_rate, "kWh.") # Fois 10 parce que 10 chaînes
+print("Émissions de emcee : ", emcee_emissions, " W, avec un taux d'émission : ", emcee_emissions_rate)
 
 os.remove('emissions.csv')
+
 
 ### Modèle sans structure en train de fusionner ###
 
@@ -165,7 +167,7 @@ for k in range(m.nparam):
     fig, ax = plt.subplots()
     for j in range(m.nwalkers):
         f_auto = emcee.autocorr.function_1d(m.chaines[:,j,k]) # fonction d'autocorrelation
-        x = np.linspace(1, m.step, m.step)
+        x = np.linspace(1, (m.step - m.step_burnin), (m.step - m.step_burnin))
         ax.plot(x, f_auto, ls='-')
         plt.xscale('log')
         ax.set_title(f"Autocorrelation paramètre {parametre[k]}")
