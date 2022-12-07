@@ -4,7 +4,7 @@ Ce code permet de tester et comparer des méthodes bayésiennes, sur des donnée
 
 Ces données sont dans les fichiers .npy
 Le projet se trouve dans le fichier inference_bay.py.
-Le fichier plots.py se charge de tracer les différents graphes et le fichier style.py permet le style des plots.
+Le fichier plots.py se charge de tracer les différents graphes ainsi que d'afficher des données importants pour le travail. Le fichier style.py permet le style des plots.
 Les graphes sont exportés dans le dossier plots.
 
 Il y a également un rapport sur ce tp en annexe. 
